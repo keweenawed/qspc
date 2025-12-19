@@ -1,4 +1,19 @@
 
+/* The number of threads to use. */
+#define QSPC_NUM_THREADS 4
+
+/* Maximum values that the coefficients of the powers on q-series can take. */
+#define QSPC_MAX_POWER_DEG_1 4
+#define QSPC_MAX_POWER_DEG_2 4
+
+/* Maximum values the coefficients on q-Pochhammer subscripts can take. */
+#define QSPC_MAX_FAC_DEG_0 3
+#define QSPC_MAX_FAC_DEG_1 3
+
+/* Maximum values the diliations on q-Pochhammer symbols can take. */
+#define QSPC_MAX_DIL_1 3
+#define QSPC_MAX_DIL_2 3
+
 /* The maximum number of q-Pochhammer symbols to allow on the numerator or
  * denominator of a q-series. */
 #define QSPC_MAX_NUM_QPS 1
