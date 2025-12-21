@@ -180,7 +180,7 @@ static inline void expand_q_binomial(int64_t top, int64_t bottom,
 	}
 }
 
-extern int64_t QSPC_integer_divisors(int64_t, int64_t *);
+extern int64_t QSPC_divisors(int64_t, int64_t **);
 
 /* Uniquely factors a truncated series with constant term 1 into a product of
  * geometric series so that when expanded, the coefficients match up to the
@@ -199,15 +199,13 @@ void QSPC_find_product_form(int64_t *series, int64_t *powers, int64_t bound)
 
 	/* This algorithm is derived from observations in the book The Theory
 	 * of Partitions by George Andrews. */
-	for (int64_t index1 = 1; index1 < (int64_t)bound; ++index1) {
+	for (int64_t index1 = 1; index1 < bound; ++index1) {
 		int64_t power = 0;
 		int64_t length;
-
-		/* This is a very lazy estimate for the number of divisors. */
-		int64_t divisors[bound];
+		int64_t *divisors;
 
 		for (int64_t index2 = 1; index2 < index1; ++index2) {
-			length = QSPC_integer_divisors(index2, divisors);
+			length = QSPC_divisors(index2, &divisors);
 
 			for (int64_t index3 = 0; index3 < length; ++index3) {
 				power -= series[index1 - index2]
@@ -216,7 +214,7 @@ void QSPC_find_product_form(int64_t *series, int64_t *powers, int64_t bound)
 			}
 		}
 
-		length = QSPC_integer_divisors(index1, divisors);
+		length = QSPC_divisors(index1, &divisors);
 
 		for (int64_t index2 = 0; index2 < length - 1; ++index2) {
 			power -= divisors[index2] * powers[divisors[index2]];

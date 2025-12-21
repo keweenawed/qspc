@@ -9,6 +9,8 @@ extern int64_t QSPC_find_pattern(int64_t *, int64_t *);
 extern void QSPC_find_product_form(int64_t *, int64_t *, int64_t);
 extern void QSPC_build_series(int64_t *, int64_t *, int64_t);
 extern int64_t QSPC_pattern_gcd(int64_t *, int64_t);
+extern void QSPC_generate_divisors(void);
+extern void QSPC_delete_divisors(void);
 
 extern pthread_mutex_t QSPC_print_lock;
 
@@ -161,11 +163,12 @@ int main(int argc, char **argv)
 	(void)argc;
 	(void)argv;
 
+	/* Initialization. */
+	QSPC_generate_divisors();
+	pthread_mutex_init(&QSPC_print_lock, NULL);
 	printf("\\documentclass[10pt]{article}\n");
 	printf("\\usepackage{amsmath}\n");
 	printf("\\usepackage[margin=0.1in]{geometry}\n\\begin{document}\n");
-
-	pthread_mutex_init(&QSPC_print_lock, NULL);
 
 	for (int64_t index = 0; index < QSPC_NUM_THREADS; ++index) {
 		pthread_create(&threads[index], NULL, worker_thread,
@@ -176,6 +179,8 @@ int main(int argc, char **argv)
 		pthread_join(threads[index], NULL);
 	}
 
+	/* Cleanup. */
+	QSPC_delete_divisors();
 	pthread_mutex_destroy(&QSPC_print_lock);
 	printf("\\end{document}\n");
 
