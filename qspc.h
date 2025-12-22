@@ -1,4 +1,10 @@
 
+/* Largest number of cached parameters allowed at any given time. */
+#define QSPC_JOB_QUEUE_MAX 10
+
+/* Number of parameters to cache per thread. */
+#define QSPC_JOB_CACHE_SIZE 10
+
 /* The number of threads to use. */
 #define QSPC_NUM_THREADS 4
 
