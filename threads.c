@@ -40,11 +40,14 @@ static volatile int64_t QSPC_job_queue_length;
  * worker threads to finish. */
 static volatile bool QSPC_keep_working;
 
-/* Lock to modify the queue.  */
+/* Used to make sure the main thread gets priority in acquiring the mutex.
+ * Not the most efficient possible solution, but this is at least correct. */
+static volatile bool QSPC_yield_to_main;
+
+/* Lock to modify the queue. */
 static pthread_mutex_t QSPC_job_lock;
 
-/* Lock and conditional variable for the main thread. */
-static pthread_mutex_t QSPC_generator_lock;
+/* Conditional variable for waking up the main thread. */
 static pthread_cond_t QSPC_generator_cond;
 
 /* Helper function for work_recursive_step. Adds a parameter combination to
@@ -59,9 +62,9 @@ static void submit_parameters(int64_t *parameters)
 		/* If the queue is completely full, wait until it is emptied.
 		 * One of the worker threads will then signal to continue. */
 		if (QSPC_job_queue_length == QSPC_JOB_QUEUE_MAX) {
-			pthread_mutex_unlock(&QSPC_job_lock);
 			pthread_cond_wait(&QSPC_generator_cond,
-					  &QSPC_generator_lock);
+					  &QSPC_job_lock);
+			QSPC_yield_to_main = false;
 		}
 
 		/* Prepend a new queue element. */
@@ -222,6 +225,16 @@ static void *worker_thread(void *argument)
 	for (;;) {
 		pthread_mutex_lock(&QSPC_job_lock);
 
+		/* If this condition is true, then main is waiting for the
+		 * mutex, and needs to have priority. */
+		if (QSPC_yield_to_main) {
+			pthread_mutex_unlock(&QSPC_job_lock);
+			continue;
+		}
+
+		/* If this holds instead, the worker thread holding the mutex
+		 * is the first to discover the queue is empty. That is,
+		 * unless there is no more work to do. */
 		if (QSPC_job_queue_length == 0) {
 			if (!QSPC_keep_working) {
 				pthread_mutex_unlock(&QSPC_job_lock);
@@ -230,6 +243,8 @@ static void *worker_thread(void *argument)
 
 			/* If the queue is empty and QSPC_keep_working is true
 			 * then the main thread is waiting to be woken up. */
+			QSPC_yield_to_main = true;
+			pthread_mutex_unlock(&QSPC_job_lock);
 			pthread_cond_signal(&QSPC_generator_cond);
 			continue;
 		}
@@ -259,18 +274,17 @@ int main(int argc, char **argv)
 	(void)argv;
 
 	QSPC_keep_working = true;
+	QSPC_yield_to_main = false;
 
 	/* Create a permanent list of divisors for QSPC_find_product_form. */
 	QSPC_generate_divisors();
 
 	pthread_mutex_init(&QSPC_print_lock, NULL);
 	pthread_mutex_init(&QSPC_job_lock, NULL);
-	pthread_mutex_init(&QSPC_generator_lock, NULL);
 	pthread_cond_init(&QSPC_generator_cond, NULL);
 
-	/* The multithreading logic requires these to start locked. */
+	/* The multithreading logic requires this to start locked. */
 	pthread_mutex_lock(&QSPC_job_lock);
-	pthread_mutex_lock(&QSPC_generator_lock);
 
 	/* Header for the LaTeX file. */
 	printf("\\documentclass[10pt]{article}\n");
@@ -278,7 +292,8 @@ int main(int argc, char **argv)
 	printf("\\usepackage[margin=0.1in]{geometry}\n\\begin{document}\n");
 
 	for (int64_t index = 0; index < QSPC_NUM_THREADS; ++index) {
-		pthread_create(&threads[index], NULL, worker_thread, NULL);
+		pthread_create(&threads[index], NULL, worker_thread,
+			       (void *)index);
 	}
 
 	/* Start generating the job queue. */
@@ -291,7 +306,6 @@ int main(int argc, char **argv)
 	 * finish the queue, and then clean up. */
 	QSPC_keep_working = false;
 	pthread_mutex_unlock(&QSPC_job_lock);
-	pthread_mutex_unlock(&QSPC_generator_lock);
 
 	for (int64_t index = 0; index < QSPC_NUM_THREADS; ++index) {
 		pthread_join(threads[index], NULL);
@@ -300,9 +314,9 @@ int main(int argc, char **argv)
 	QSPC_delete_divisors();
 	pthread_mutex_destroy(&QSPC_print_lock);
 	pthread_mutex_destroy(&QSPC_job_lock);
-	pthread_mutex_destroy(&QSPC_generator_lock);
 	pthread_cond_destroy(&QSPC_generator_cond);
 
+	/* Footer for the LaTeX file. */
 	printf("\\end{document}\n");
 
 	return 0;
